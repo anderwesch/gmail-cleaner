@@ -10,7 +10,7 @@ export async function POST() {
 
   const userId = session.user.id
 
-  // Cancel any running sync
+  // Mark user as syncing
   await prisma.user.update({ where: { id: userId }, data: { syncStatus: 'syncing' } })
 
   const syncJob = await prisma.syncJob.create({

@@ -66,5 +66,5 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  return NextResponse.json({ deleted: totalDeleted })
+  return NextResponse.json({ queued: totalDeleted })
 }

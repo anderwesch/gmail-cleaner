@@ -11,6 +11,10 @@ export async function POST(req: NextRequest) {
   const { senderGroupId, deleteExisting }: { senderGroupId: string; deleteExisting: boolean } =
     await req.json()
 
+  if (!senderGroupId || typeof senderGroupId !== 'string' || typeof deleteExisting !== 'boolean') {
+    return NextResponse.json({ error: 'senderGroupId (string) and deleteExisting (boolean) required' }, { status: 400 })
+  }
+
   const group = await prisma.senderGroup.findFirst({
     where: { id: senderGroupId, userId: session.user.id },
   })
@@ -20,11 +24,17 @@ export async function POST(req: NextRequest) {
   let method: 'link' | 'email' = 'link'
   let emailsDeleted = 0
 
+  const needsGmail = (!group.unsubscribeUrl && !!group.unsubscribeEmail) || deleteExisting
+  let gmail: ReturnType<typeof createGmailClient> | undefined
+
+  if (needsGmail) {
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: session.user.id } })
+    gmail = createGmailClient(decrypt(user.googleAccessToken))
+  }
+
   // Unsubscribe via email if only email method available
   if (!group.unsubscribeUrl && group.unsubscribeEmail) {
     method = 'email'
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: session.user.id } })
-    const gmail = createGmailClient(decrypt(user.googleAccessToken))
 
     const raw = Buffer.from(
       `To: ${group.unsubscribeEmail}\r\n` +
@@ -33,7 +43,7 @@ export async function POST(req: NextRequest) {
       `Please unsubscribe me from this mailing list.`
     ).toString('base64url')
 
-    await gmail.users.messages.send({
+    await gmail!.users.messages.send({
       userId: 'me',
       requestBody: { raw },
     })
@@ -41,14 +51,11 @@ export async function POST(req: NextRequest) {
 
   // Optionally delete existing emails
   if (deleteExisting) {
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: session.user.id } })
-    const gmail = createGmailClient(decrypt(user.googleAccessToken))
-
     const messageIds: string[] = []
     let nextPageToken: string | undefined
 
     do {
-      const res = await gmail.users.messages.list({
+      const res = await gmail!.users.messages.list({
         userId: 'me',
         q: `from:${group.senderEmail}`,
         maxResults: 500,
@@ -60,7 +67,7 @@ export async function POST(req: NextRequest) {
     } while (nextPageToken)
 
     for (let i = 0; i < messageIds.length; i += 1000) {
-      await gmail.users.messages.batchDelete({
+      await gmail!.users.messages.batchDelete({
         userId: 'me',
         requestBody: { ids: messageIds.slice(i, i + 1000) },
       })
@@ -71,6 +78,14 @@ export async function POST(req: NextRequest) {
     await prisma.senderGroup.update({
       where: { id: senderGroupId },
       data: { emailCount: 0 },
+    })
+
+    await prisma.deleteAction.create({
+      data: {
+        userId: session.user.id,
+        senderGroupId,
+        emailsDeleted,
+      },
     })
   }
 
