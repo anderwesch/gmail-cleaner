@@ -1,4 +1,5 @@
 import { Job } from 'bullmq'
+import pLimit from 'p-limit'
 import { prisma } from '@/lib/prisma'
 import { decrypt } from '@/lib/crypto'
 import { createGmailClient } from '@/lib/gmail'
@@ -15,21 +16,21 @@ interface SyncJobData {
 export async function processFullSync(job: Job<SyncJobData>): Promise<void> {
   const { userId, syncJobId } = job.data
 
-  await prisma.syncJob.update({
-    where: { id: syncJobId },
-    data: { status: 'running', startedAt: new Date() },
-  })
-
-  await prisma.user.update({
-    where: { id: userId },
-    data: { syncStatus: 'syncing' },
-  })
-
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } })
-  const accessToken = decrypt(user.googleAccessToken)
-  const gmail = createGmailClient(accessToken)
-
   try {
+    await prisma.syncJob.update({
+      where: { id: syncJobId },
+      data: { status: 'running', startedAt: new Date() },
+    })
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { syncStatus: 'syncing' },
+    })
+
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } })
+    const accessToken = decrypt(user.googleAccessToken)
+    const gmail = createGmailClient(accessToken)
+
     // Get total count estimate
     const profile = await gmail.users.getProfile({ userId: 'me' })
     const totalEstimate = profile.data.messagesTotal ?? 0
@@ -43,6 +44,8 @@ export async function processFullSync(job: Job<SyncJobData>): Promise<void> {
     const syncJob = await prisma.syncJob.findUniqueOrThrow({ where: { id: syncJobId } })
     let pageToken: string | undefined = syncJob.pageTokenCursor ?? undefined
     let processedEmails = syncJob.processedEmails
+
+    const limit = pLimit(10)
 
     do {
       const listRes = await gmail.users.messages.list({
@@ -59,7 +62,7 @@ export async function processFullSync(job: Job<SyncJobData>): Promise<void> {
         const chunk = messageIds.slice(i, i + 100)
 
         const rawMessages: RawMessage[] = await Promise.all(
-          chunk.map(async (id) => {
+          chunk.map(id => limit(async () => {
             const msg = await gmail.users.messages.get({
               userId: 'me',
               id,
@@ -73,7 +76,7 @@ export async function processFullSync(job: Job<SyncJobData>): Promise<void> {
               listUnsubscribe: headers.find(h => h.name === 'List-Unsubscribe')?.value ?? null,
               internalDate: msg.data.internalDate ?? '0',
             }
-          })
+          }))
         )
 
         const grouped = groupMessageHeaders(rawMessages)
