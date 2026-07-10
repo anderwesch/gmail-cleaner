@@ -143,7 +143,7 @@ export async function processFullSync(job: Job<SyncJobData>): Promise<void> {
     } while (pageToken)
 
     // --- Classification pass ---
-    // Fetch all senders for this user (only uncategorized by domain)
+    // Fetch all senders for this user
     const allSenders = await prisma.senderGroup.findMany({
       where: { userId, status: { not: 'deleted' } },
       select: { id: true, senderEmail: true, hasUnsubscribeLink: true },
@@ -161,9 +161,9 @@ export async function processFullSync(job: Job<SyncJobData>): Promise<void> {
         // Layer 2: Gmail query probes (only if domain rules didn't match)
         if (!category) {
           const queries: { q: string; cat: typeof CATEGORY_PRIORITY[number] }[] = [
-            { q: `from:${sender.senderEmail} category:promotions`, cat: 'promotions' },
             { q: `from:${sender.senderEmail} category:social`, cat: 'social' },
             { q: `from:${sender.senderEmail} category:updates`, cat: 'updates' },
+            { q: `from:${sender.senderEmail} category:promotions`, cat: 'promotions' },
           ]
 
           for (const { q, cat } of queries) {
