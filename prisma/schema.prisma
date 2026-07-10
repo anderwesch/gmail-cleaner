@@ -1,0 +1,110 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String        @id @default(uuid())
+  email              String        @unique
+  name               String
+  avatar             String?
+  googleAccessToken  String
+  googleRefreshToken String
+  lastSyncedAt       DateTime?
+  syncStatus         SyncStatus    @default(idle)
+  createdAt          DateTime      @default(now())
+
+  senderGroups       SenderGroup[]
+  syncJobs           SyncJob[]
+  unsubscribeActions UnsubscribeAction[]
+  deleteActions      DeleteAction[]
+}
+
+enum SyncStatus {
+  idle
+  syncing
+  error
+}
+
+model SenderGroup {
+  id                 String        @id @default(uuid())
+  userId             String
+  senderEmail        String
+  senderName         String
+  emailCount         Int           @default(0)
+  latestEmailDate    DateTime?
+  hasUnsubscribeLink Boolean       @default(false)
+  unsubscribeUrl     String?
+  unsubscribeEmail   String?
+  status             SenderStatus  @default(active)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  user               User          @relation(fields: [userId], references: [id])
+  unsubscribeActions UnsubscribeAction[]
+  deleteActions      DeleteAction[]
+
+  @@unique([userId, senderEmail])
+  @@index([userId, emailCount(sort: Desc)])
+}
+
+enum SenderStatus {
+  active
+  unsubscribed
+  deleted
+}
+
+model SyncJob {
+  id              String     @id @default(uuid())
+  userId          String
+  status          JobStatus  @default(queued)
+  progress        Int        @default(0)
+  totalEmails     Int?
+  processedEmails Int        @default(0)
+  pageTokenCursor String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  errorMessage    String?
+
+  user            User       @relation(fields: [userId], references: [id])
+}
+
+enum JobStatus {
+  queued
+  running
+  completed
+  failed
+}
+
+model UnsubscribeAction {
+  id              String      @id @default(uuid())
+  userId          String
+  senderGroupId   String
+  method          UnsubMethod
+  performedAt     DateTime    @default(now())
+  deleteExisting  Boolean
+  emailsDeleted   Int         @default(0)
+
+  user            User        @relation(fields: [userId], references: [id])
+  senderGroup     SenderGroup @relation(fields: [senderGroupId], references: [id])
+}
+
+enum UnsubMethod {
+  link
+  email
+}
+
+model DeleteAction {
+  id            String      @id @default(uuid())
+  userId        String
+  senderGroupId String
+  emailsDeleted Int
+  performedAt   DateTime    @default(now())
+
+  user          User        @relation(fields: [userId], references: [id])
+  senderGroup   SenderGroup @relation(fields: [senderGroupId], references: [id])
+}
