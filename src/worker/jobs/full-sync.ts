@@ -4,6 +4,7 @@ import { google } from 'googleapis'
 import { prisma } from '@/lib/prisma'
 import { decrypt, encrypt } from '@/lib/crypto'
 import { groupMessageHeaders } from '@/lib/group-senders'
+import { classifyByDomain, CATEGORY_PRIORITY } from '@/lib/classify-sender'
 import type { RawMessage } from '@/types'
 
 export const SYNC_QUEUE = 'full-sync'
@@ -140,6 +141,99 @@ export async function processFullSync(job: Job<SyncJobData>): Promise<void> {
       })
 
     } while (pageToken)
+
+    // --- Classification pass ---
+    // Fetch all senders for this user (only uncategorized by domain)
+    const allSenders = await prisma.senderGroup.findMany({
+      where: { userId, status: { not: 'deleted' } },
+      select: { id: true, senderEmail: true, hasUnsubscribeLink: true },
+    })
+
+    const classifyLimit = pLimit(10)
+
+    await Promise.all(
+      allSenders.map(sender => classifyLimit(async () => {
+        // Layer 1: domain rules
+        const domainCategory = classifyByDomain(sender.senderEmail, sender.hasUnsubscribeLink)
+
+        let category = domainCategory
+
+        // Layer 2: Gmail query probes (only if domain rules didn't match)
+        if (!category) {
+          const queries: { q: string; cat: typeof CATEGORY_PRIORITY[number] }[] = [
+            { q: `from:${sender.senderEmail} category:promotions`, cat: 'promotions' },
+            { q: `from:${sender.senderEmail} category:social`, cat: 'social' },
+            { q: `from:${sender.senderEmail} category:updates`, cat: 'updates' },
+          ]
+
+          for (const { q, cat } of queries) {
+            const res = await gmail.users.messages.list({ userId: 'me', q, maxResults: 1 })
+            if ((res.data.messages?.length ?? 0) > 0) {
+              category = cat
+              break
+            }
+          }
+
+          // oldmail: no emails newer than 2 years
+          if (!category) {
+            const newRes = await gmail.users.messages.list({
+              userId: 'me',
+              q: `from:${sender.senderEmail} newer_than:730d`,
+              maxResults: 1,
+            })
+            const oldRes = await gmail.users.messages.list({
+              userId: 'me',
+              q: `from:${sender.senderEmail} older_than:730d`,
+              maxResults: 1,
+            })
+            if ((newRes.data.messages?.length ?? 0) === 0 && (oldRes.data.messages?.length ?? 0) > 0) {
+              category = 'oldmail'
+            }
+          }
+
+          // largemail: at least one email with large attachment
+          if (!category) {
+            const largeRes = await gmail.users.messages.list({
+              userId: 'me',
+              q: `from:${sender.senderEmail} has:attachment size:5000000`,
+              maxResults: 1,
+            })
+            if ((largeRes.data.messages?.length ?? 0) > 0) {
+              category = 'largemail'
+            }
+          }
+        }
+
+        // Inbox/archived counts
+        const [inboxRes, archivedRes] = await Promise.all([
+          gmail.users.messages.list({
+            userId: 'me',
+            q: `from:${sender.senderEmail} in:inbox`,
+            maxResults: 1,
+            fields: 'resultSizeEstimate',
+          }),
+          gmail.users.messages.list({
+            userId: 'me',
+            q: `from:${sender.senderEmail} -in:inbox`,
+            maxResults: 1,
+            fields: 'resultSizeEstimate',
+          }),
+        ])
+
+        const inboxCount = inboxRes.data.resultSizeEstimate ?? 0
+        const archivedCount = archivedRes.data.resultSizeEstimate ?? 0
+
+        await prisma.senderGroup.update({
+          where: { id: sender.id },
+          data: {
+            category: category ?? null,
+            inboxCount,
+            archivedCount,
+            emailCount: inboxCount + archivedCount,
+          },
+        })
+      }))
+    )
 
     await prisma.syncJob.update({
       where: { id: syncJobId },
