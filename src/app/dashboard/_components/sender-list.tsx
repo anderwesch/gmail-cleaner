@@ -10,9 +10,11 @@ interface SenderListProps {
   onSelect: (sender: SenderGroup, checked: boolean) => void
   onUnsubscribe: (sender: SenderGroup) => void
   onDelete: (sender: SenderGroup) => void
+  category: string
+  location: 'all' | 'inbox' | 'archived'
 }
 
-export function SenderList({ search, selectedIds, onSelect, onUnsubscribe, onDelete }: SenderListProps) {
+export function SenderList({ search, selectedIds, onSelect, onUnsubscribe, onDelete, category, location }: SenderListProps) {
   const [senders, setSenders] = useState<SenderGroup[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -20,7 +22,13 @@ export function SenderList({ search, selectedIds, onSelect, onUnsubscribe, onDel
 
   const fetchSenders = useCallback(async () => {
     setLoading(true)
-    const params = new URLSearchParams({ search, page: String(page), limit: '50' })
+    const params = new URLSearchParams({
+      search,
+      page: String(page),
+      limit: '50',
+      ...(category !== 'all' ? { category } : {}),
+      ...(location !== 'all' ? { location } : {}),
+    })
     const res = await fetch(`/api/senders?${params}`)
     if (res.ok) {
       const data = await res.json()
@@ -28,7 +36,7 @@ export function SenderList({ search, selectedIds, onSelect, onUnsubscribe, onDel
       setTotal(data.total)
     }
     setLoading(false)
-  }, [search, page])
+  }, [search, page, category, location])
 
   useEffect(() => {
     setPage(1)
@@ -67,6 +75,7 @@ export function SenderList({ search, selectedIds, onSelect, onUnsubscribe, onDel
           onSelect={onSelect}
           onUnsubscribe={onUnsubscribe}
           onDelete={onDelete}
+          location={location}
         />
       ))}
       {total > 50 && (

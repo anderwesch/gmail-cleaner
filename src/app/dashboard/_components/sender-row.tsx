@@ -8,10 +8,15 @@ interface SenderRowProps {
   onSelect: (sender: SenderGroup, checked: boolean) => void
   onUnsubscribe: (sender: SenderGroup) => void
   onDelete: (sender: SenderGroup) => void
+  location: 'all' | 'inbox' | 'archived'
 }
 
-export function SenderRow({ sender, selected, onSelect, onUnsubscribe, onDelete }: SenderRowProps) {
+export function SenderRow({ sender, selected, onSelect, onUnsubscribe, onDelete, location }: SenderRowProps) {
   const isUnsubscribed = sender.status === 'unsubscribed'
+  const displayCount =
+    location === 'inbox' ? sender.inboxCount :
+    location === 'archived' ? sender.archivedCount :
+    sender.emailCount
 
   return (
     <div data-testid="sender-row" className={`flex items-center gap-4 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors ${selected ? 'bg-blue-50' : ''}`}>
@@ -30,7 +35,7 @@ export function SenderRow({ sender, selected, onSelect, onUnsubscribe, onDelete 
       </div>
 
       <div className="text-sm text-gray-500 whitespace-nowrap">
-        <span className="font-medium text-gray-700">{sender.emailCount.toLocaleString()}</span> emails
+        <span className="font-medium text-gray-700">{displayCount.toLocaleString()}</span> emails
       </div>
 
       {isUnsubscribed && (

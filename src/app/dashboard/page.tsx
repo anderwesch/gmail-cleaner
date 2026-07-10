@@ -5,9 +5,16 @@ import type { SenderGroup } from '@prisma/client'
 import { SenderList } from './_components/sender-list'
 import { UnsubscribeModal } from './_components/unsubscribe-modal'
 import { DeleteConfirmModal } from './_components/delete-confirm-modal'
+import { CategoryTabs } from './_components/category-tabs'
+import { LocationTabs } from './_components/location-tabs'
+import { SuggestionsCard } from './_components/suggestions-card'
+
+type Location = 'all' | 'inbox' | 'archived'
 
 export default function DashboardPage() {
   const [search, setSearch] = useState('')
+  const [activeCategory, setActiveCategory] = useState('all')
+  const [activeLocation, setActiveLocation] = useState<Location>('all')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [selectedNames, setSelectedNames] = useState<Map<string, string>>(new Map())
   const [unsubscribeSender, setUnsubscribeSender] = useState<SenderGroup | null>(null)
@@ -32,10 +39,7 @@ export default function DashboardPage() {
   }
 
   const handleBulkDelete = () => {
-    setDeleteTarget({
-      ids: [...selectedIds],
-      names: [...selectedNames.values()],
-    })
+    setDeleteTarget({ ids: [...selectedIds], names: [...selectedNames.values()] })
   }
 
   const handleDeleteConfirm = async () => {
@@ -54,26 +58,41 @@ export default function DashboardPage() {
     setRefreshKey(k => k + 1)
   }
 
+  const handleCategorySelect = (category: string) => {
+    setActiveCategory(category)
+    setSelectedIds(new Set())
+    setSelectedNames(new Map())
+  }
+
   return (
     <div>
-      <div className="mb-4">
+      <SuggestionsCard onCategorySelect={handleCategorySelect} syncKey={refreshKey} />
+
+      <div className="mb-3">
+        <CategoryTabs activeCategory={activeCategory} onChange={handleCategorySelect} />
+      </div>
+
+      <div className="flex items-center gap-3 mb-4">
+        <LocationTabs activeLocation={activeLocation} onChange={setActiveLocation} />
         <input
           type="text"
           placeholder="Search senders..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 px-4 py-2 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <SenderList
-          key={refreshKey}
+          key={`${refreshKey}-${activeCategory}-${activeLocation}`}
           search={search}
           selectedIds={selectedIds}
           onSelect={(sender, checked) => handleSelect(sender, checked)}
           onUnsubscribe={setUnsubscribeSender}
           onDelete={handleDeleteSingle}
+          category={activeCategory}
+          location={activeLocation}
         />
       </div>
 
@@ -87,13 +106,7 @@ export default function DashboardPage() {
             Delete all
           </button>
           <button
-            onClick={() => {
-              // For bulk unsubscribe, we need senders with unsubscribe links
-              // Since we only have IDs, the user will need to unsubscribe one-by-one
-              // Show a toast/note that they should unsubscribe individually
-              // For now, clear selection to guide the user
-              alert(`Select a single sender and click Unsubscribe to unsubscribe one at a time.`)
-            }}
+            onClick={() => alert('Select a single sender and click Unsubscribe to unsubscribe one at a time.')}
             className="px-4 py-1.5 bg-blue-500 hover:bg-blue-600 rounded-full transition-colors"
           >
             Unsubscribe selected
@@ -102,7 +115,7 @@ export default function DashboardPage() {
             onClick={() => { setSelectedIds(new Set()); setSelectedNames(new Map()) }}
             className="text-gray-400 hover:text-white transition-colors"
           >
-            &times;
+            ×
           </button>
         </div>
       )}
