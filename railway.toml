@@ -2,6 +2,5 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "npm run start"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 30
