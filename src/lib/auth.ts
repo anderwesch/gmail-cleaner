@@ -2,6 +2,8 @@ import NextAuth from 'next-auth'
 import Google from 'next-auth/providers/google'
 import { prisma } from './prisma'
 import { encrypt } from './crypto'
+import { getQueue } from './redis'
+import { SYNC_QUEUE } from '@/worker/jobs/full-sync'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -27,7 +29,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (!account || account.provider !== 'google') return false
       if (!account.access_token || !account.refresh_token) return false
 
-      await prisma.user.upsert({
+      const existing = await prisma.user.findUnique({ where: { email: user.email! } })
+
+      const dbUser = await prisma.user.upsert({
         where: { email: user.email! },
         create: {
           email: user.email!,
@@ -43,6 +47,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           avatar: user.image ?? null,
         },
       })
+
+      // Enqueue sync for new users only
+      if (!existing) {
+        const syncJob = await prisma.syncJob.create({
+          data: { userId: dbUser.id, status: 'queued' },
+        })
+        const queue = getQueue(SYNC_QUEUE)
+        await queue.add('full-sync', { userId: dbUser.id, syncJobId: syncJob.id }, {
+          attempts: 5,
+          backoff: { type: 'exponential', delay: 5000 },
+        })
+      }
+
       return true
     },
     async session({ session, token }) {
