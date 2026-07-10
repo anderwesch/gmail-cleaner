@@ -44,17 +44,13 @@ function setDismissed(cats: string[]) {
 
 export function SuggestionsCard({ onCategorySelect, syncKey }: SuggestionsCardProps) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
-  const [dismissed, setDismissedState] = useState<string[]>([])
+  const [dismissed, setDismissedState] = useState<string[]>(getDismissed)
 
   useEffect(() => {
     // Reset dismissed on new sync
     setDismissed([])
     setDismissedState([])
   }, [syncKey])
-
-  useEffect(() => {
-    setDismissedState(getDismissed())
-  }, [])
 
   useEffect(() => {
     fetch('/api/suggestions')
