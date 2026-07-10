@@ -38,6 +38,9 @@ model SenderGroup {
   emailCount         Int           @default(0)
   latestEmailDate    DateTime?
   hasUnsubscribeLink Boolean       @default(false)
+  category           SenderCategory?
+  inboxCount         Int             @default(0)
+  archivedCount      Int             @default(0)
   unsubscribeUrl     String?
   unsubscribeEmail   String?
   status             SenderStatus  @default(active)
@@ -56,6 +59,18 @@ enum SenderStatus {
   active
   unsubscribed
   deleted
+}
+
+enum SenderCategory {
+  newsletters
+  promotions
+  social
+  updates
+  ridesharing
+  food
+  receipts
+  oldmail
+  largemail
 }
 
 model SyncJob {
