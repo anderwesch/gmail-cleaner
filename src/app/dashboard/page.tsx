@@ -87,6 +87,18 @@ export default function DashboardPage() {
             Delete all
           </button>
           <button
+            onClick={() => {
+              // For bulk unsubscribe, we need senders with unsubscribe links
+              // Since we only have IDs, the user will need to unsubscribe one-by-one
+              // Show a toast/note that they should unsubscribe individually
+              // For now, clear selection to guide the user
+              alert(`Select a single sender and click Unsubscribe to unsubscribe one at a time.`)
+            }}
+            className="px-4 py-1.5 bg-blue-500 hover:bg-blue-600 rounded-full transition-colors"
+          >
+            Unsubscribe selected
+          </button>
+          <button
             onClick={() => { setSelectedIds(new Set()); setSelectedNames(new Map()) }}
             className="text-gray-400 hover:text-white transition-colors"
           >

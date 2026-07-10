@@ -10,6 +10,16 @@ export async function POST() {
 
   const userId = session.user.id
 
+  // Check for already-running sync
+  const activeJob = await prisma.syncJob.findFirst({
+    where: { userId, status: { in: ['queued', 'running'] } },
+    orderBy: { startedAt: 'desc' },
+  })
+
+  if (activeJob) {
+    return NextResponse.json({ syncJobId: activeJob.id, alreadyRunning: true })
+  }
+
   // Mark user as syncing
   await prisma.user.update({ where: { id: userId }, data: { syncStatus: 'syncing' } })
 

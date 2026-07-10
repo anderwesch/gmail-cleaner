@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { signIn } from 'next-auth/react'
 import type { SyncStatusResponse } from '@/types'
 
 export function SyncStatus() {
@@ -47,17 +48,36 @@ export function SyncStatus() {
       )}
 
       {isError && (
-        <span className="text-sm text-red-600">
-          Sync failed — {status.errorMessage}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-red-600">
+            {status.errorMessage?.includes('invalid_grant') || status.errorMessage?.includes('401')
+              ? 'Google account disconnected'
+              : 'Sync failed'}
+          </span>
+          {status.errorMessage?.includes('invalid_grant') || status.errorMessage?.includes('401') ? (
+            <button
+              onClick={() => signIn('google', { callbackUrl: '/dashboard' })}
+              className="text-sm px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+            >
+              Reconnect
+            </button>
+          ) : (
+            <button
+              onClick={triggerSync}
+              className="text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition-colors"
+            >
+              Retry sync
+            </button>
+          )}
+        </div>
       )}
 
-      {!isSyncing && (
+      {!isSyncing && !isError && (
         <button
           onClick={triggerSync}
           className="text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 transition-colors"
         >
-          {isError ? 'Retry sync' : 'Re-sync'}
+          Re-sync
         </button>
       )}
     </div>

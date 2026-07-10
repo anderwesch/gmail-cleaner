@@ -10,7 +10,8 @@ const E2E_TEST_SESSION = {
 }
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const isTestMode = process.env.E2E_TEST === 'true'
+  // NEVER set E2E_TEST=true in production — this bypasses authentication
+  const isTestMode = process.env.NODE_ENV !== 'production' && process.env.E2E_TEST === 'true'
   const hasTestBypassCookie = isTestMode && cookies().get('e2e-bypass')?.value === '1'
   const session = hasTestBypassCookie ? E2E_TEST_SESSION : await auth()
   if (!session) redirect('/')

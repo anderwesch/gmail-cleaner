@@ -1,8 +1,8 @@
 import { Job } from 'bullmq'
 import pLimit from 'p-limit'
+import { google } from 'googleapis'
 import { prisma } from '@/lib/prisma'
-import { decrypt } from '@/lib/crypto'
-import { createGmailClient } from '@/lib/gmail'
+import { decrypt, encrypt } from '@/lib/crypto'
 import { groupMessageHeaders } from '@/lib/group-senders'
 import type { RawMessage } from '@/types'
 
@@ -28,8 +28,32 @@ export async function processFullSync(job: Job<SyncJobData>): Promise<void> {
     })
 
     const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } })
-    const accessToken = decrypt(user.googleAccessToken)
-    const gmail = createGmailClient(accessToken)
+
+    // Set up OAuth2 client and refresh the access token
+    const oAuth2 = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+    )
+    oAuth2.setCredentials({
+      access_token: decrypt(user.googleAccessToken),
+      refresh_token: decrypt(user.googleRefreshToken),
+    })
+
+    // Get a fresh token (refreshes automatically if expired)
+    const { credentials } = await oAuth2.refreshAccessToken()
+    const freshAccessToken = credentials.access_token!
+
+    // Persist refreshed tokens
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        googleAccessToken: encrypt(freshAccessToken),
+        ...(credentials.refresh_token ? { googleRefreshToken: encrypt(credentials.refresh_token) } : {}),
+      },
+    })
+
+    // Use the oauth2 client directly for Gmail
+    const gmail = google.gmail({ version: 'v1', auth: oAuth2 })
 
     // Get total count estimate
     const profile = await gmail.users.getProfile({ userId: 'me' })
@@ -38,6 +62,12 @@ export async function processFullSync(job: Job<SyncJobData>): Promise<void> {
     await prisma.syncJob.update({
       where: { id: syncJobId },
       data: { totalEmails: totalEstimate },
+    })
+
+    // Reset counts before re-sync so increments are accurate
+    await prisma.senderGroup.updateMany({
+      where: { userId },
+      data: { emailCount: 0 },
     })
 
     // Restore cursor if resuming

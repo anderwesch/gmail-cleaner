@@ -8,8 +8,10 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const search = searchParams.get('search') ?? ''
-  const page = parseInt(searchParams.get('page') ?? '1', 10)
-  const limit = parseInt(searchParams.get('limit') ?? '50', 10)
+  const rawPage = parseInt(searchParams.get('page') ?? '1', 10)
+  const rawLimit = parseInt(searchParams.get('limit') ?? '50', 10)
+  const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 50
   const skip = (page - 1) * limit
 
   const where = {
