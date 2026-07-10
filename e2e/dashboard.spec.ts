@@ -4,7 +4,12 @@ import { test, expect } from '@playwright/test'
 // Set up: mock /api/auth/session to return a valid session,
 // and mock /api/senders and /api/sync/status
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, context }) => {
+  // Set E2E bypass cookie so the server-side auth() check is skipped
+  await context.addCookies([
+    { name: 'e2e-bypass', value: '1', domain: 'localhost', path: '/' },
+  ])
+
   // Mock NextAuth session
   await page.route('**/api/auth/session', route =>
     route.fulfill({
@@ -101,7 +106,7 @@ test('bulk action bar appears when sender selected', async ({ page }) => {
   await page.goto('/dashboard')
   await page.getByRole('checkbox').first().check()
   await expect(page.getByText('1 selected')).toBeVisible()
-  await expect(page.getByRole('button', { name: /delete all/i })).toBeVisible()
+  await expect(page.getByRole('button', { name: /delete all/i }).first()).toBeVisible()
 })
 
 test('delete confirm modal appears on delete', async ({ page }) => {
