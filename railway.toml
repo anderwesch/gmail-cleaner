@@ -5,11 +5,3 @@ builder = "nixpacks"
 startCommand = "npm run start"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 30
-
-[[services]]
-name = "web"
-startCommand = "npm run start"
-
-[[services]]
-name = "worker"
-startCommand = "npm run worker"
