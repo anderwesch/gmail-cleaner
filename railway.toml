@@ -1,6 +1,2 @@
 [build]
-builder = "nixpacks"
-
-[deploy]
-healthcheckPath = "/api/health"
-healthcheckTimeout = 30
+builder = "railpack"
