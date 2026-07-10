@@ -51,6 +51,7 @@ export default function DashboardPage() {
     })
     setSelectedIds(new Set())
     setSelectedNames(new Map())
+    setDeleteTarget(null)
     setRefreshKey(k => k + 1)
   }
 
@@ -73,7 +74,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="flex items-center gap-3 mb-4">
-        <LocationTabs activeLocation={activeLocation} onChange={setActiveLocation} />
+        <LocationTabs activeLocation={activeLocation} onChange={loc => { setActiveLocation(loc); setSelectedIds(new Set()); setSelectedNames(new Map()) }} />
         <input
           type="text"
           placeholder="Search senders..."
