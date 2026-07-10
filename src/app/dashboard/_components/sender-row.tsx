@@ -14,7 +14,7 @@ export function SenderRow({ sender, selected, onSelect, onUnsubscribe, onDelete 
   const isUnsubscribed = sender.status === 'unsubscribed'
 
   return (
-    <div className={`flex items-center gap-4 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors ${selected ? 'bg-blue-50' : ''}`}>
+    <div data-testid="sender-row" className={`flex items-center gap-4 px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors ${selected ? 'bg-blue-50' : ''}`}>
       <input
         type="checkbox"
         checked={selected}
